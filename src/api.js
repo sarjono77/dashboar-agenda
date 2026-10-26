@@ -1,5 +1,5 @@
 // GANTI DENGAN URL /exec MILIKMU
-const API_URL = "https://script.google.com/macros/s/AKfycbxWKDPmAVim6gjxN9wPIOsnruR5e-2kZzwabUTyev2FK2_6NVv_Np5iC9JbLEvkCAeheg/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbzDSeZgajXmnfRzTxsD8Rx0PwDvHA0QPiud2HnaoEXbBlcwMVLZB0z0sBkqEGPq73CoVw/exec";
 
 export const getAgendas = async () => {
   try {
