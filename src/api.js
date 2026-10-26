@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbxvZHfLqmNTpx_TLyrvyChZA2Y9W0DFgWHfiHMM1XPVjB-cmRR2IKv_LPq7cqscNcPKvg/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbxVPST0q_GQrNj0LGPjzh9ZJ7IqdwVKuXiXkjbhBBwsdl6PpPKbgBj3jQ2n-pJcIbrYiw/exec";
 
 export const getAgendas = async () => {
   const res = await fetch(`${API_URL}?action=read`);
