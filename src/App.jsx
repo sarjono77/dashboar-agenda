@@ -1,338 +1,404 @@
-import React, { useState, useEffect } from 'react';
-import {
-  getAgendas,
-  createAgenda,
-  updateAgenda,
-  deleteAgenda
-} from './api';
+import { useState, useEffect } from 'react';
+import { LayoutDashboard, Calendar, FileText, Settings, Plus, Search, Trash2, X, Menu } from 'lucide-react';
+import { getAgendas, createAgenda, updateAgenda, deleteAgenda } from './api';
+
+// --- FUNGSI BANTU UNTUK RAPIKAN TANGGAL & WAKTU DARI GOOGLE SHEETS ---
+const formatTanggal = (dateStr) => {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr; // Kalau formatnya aneh, kembalikan aslinya
+  return d.toISOString().split('T')[0];
+};
+
+const formatWaktu = (dateStr) => {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  // Kadang Google Sheets ngirimnya jam 1899, kita ambil jam-menitnya saja
+  return d.toISOString().split('T')[1].substring(0, 5);
+};
 
 export default function App() {
-  const [agendas, setAgendas] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState('Semua');
-
-  // Modal Tambah / Edit
+  const [data, setData] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState('create');
-  const [selectedId, setSelectedId] = useState(null);
-  const [formData, setFormData] = useState({
-    judul: '',
-    tipe: 'Rapat',
-    tanggal: '',
-    waktu: '09:00',
-    lokasi: '',
-    penanggung_jawab: '',
-    status: 'Terjadwal',
-    disposisi: ''
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState('ikhtisar');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [editData, setEditData] = useState(null); 
+  const [isDisposisiMode, setIsDisposisiMode] = useState(false);
+
+  const [profil, setProfil] = useState(() => {
+    const saved = localStorage.getItem('profilUser');
+    return saved ? JSON.parse(saved) : { nama: 'Agus Sarjono', email: 'agus@contoh.com' };
   });
 
-  // 1. READ: Ambil semua data agenda (sebelumnya memanggil Supabase select)
   const fetchData = async () => {
     setLoading(true);
-    try {
-      const res = await getAgendas();
-      if (res.status === 'success' && Array.isArray(res.data)) {
-        setAgendas(res.data);
-      } else {
-        alert('Gagal mengambil data: ' + (res.message || 'Error'));
-      }
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setLoading(false);
-    }
+    const res = await getAgendas();
+    if (res && res.data) setData(res.data);
+    setLoading(false);
   };
 
   useEffect(() => {
     fetchData();
   }, []);
 
-  // 2. CREATE & UPDATE: Handle Submit Modal (sebelumnya Supabase insert & update)
-  const handleSubmitForm = async (e) => {
-    e.preventDefault();
-    if (!formData.judul.trim()) {
-      alert('Judul agenda wajib diisi!');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      if (modalMode === 'create') {
-        const res = await createAgenda(formData);
-        if (res.status === 'success') {
-          closeModal();
-          await fetchData();
-        } else {
-          alert('Gagal menambah agenda: ' + res.message);
-        }
-      } else {
-        const res = await updateAgenda(selectedId, formData);
-        if (res.status === 'success') {
-          closeModal();
-          await fetchData();
-        } else {
-          alert('Gagal memperbarui agenda: ' + res.message);
-        }
-      }
-    } catch (error) {
-      console.error('Error:', error);
-    } finally {
-      setLoading(false);
+  const handleDelete = async (id) => {
+    if (window.confirm('Hapus agenda ini?')) {
+      await deleteAgenda(id);
+      fetchData();
     }
   };
 
-  // 3. UPDATE: Cepat ubah status agenda (sebelumnya Supabase update status)
-  const handleStatusChange = async (id, newStatus) => {
-    setLoading(true);
-    try {
-      const res = await updateAgenda(id, { status: newStatus });
-      if (res.status === 'success') {
-        await fetchData();
-      } else {
-        alert('Gagal mengubah status: ' + res.message);
-      }
-    } catch (error) {
-      console.error('Error:', error);
-    } finally {
-      setLoading(false);
-    }
+  const handleUpdateStatus = async (id, newStatus) => {
+    await updateAgenda(id, { status: newStatus });
+    fetchData(); 
   };
 
-  // 4. UPDATE: Simpan disposisi pimpinan (sebelumnya Supabase update disposisi)
-  const handleSaveDisposisi = async (id, disposisiBaru) => {
-    setLoading(true);
-    try {
-      const res = await updateAgenda(id, { disposisi: disposisiBaru });
-      if (res.status === 'success') {
-        await fetchData();
-      } else {
-        alert('Gagal memperbarui disposisi: ' + res.message);
-      }
-    } catch (error) {
-      console.error('Error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 5. DELETE: Hapus agenda berdasarkan id (sebelumnya Supabase delete eq id)
-  const handleDelete = async (id, judul) => {
-    if (!window.confirm(`Yakin ingin menghapus agenda "${judul}"?`)) return;
-
-    setLoading(true);
-    try {
-      const res = await deleteAgenda(id);
-      if (res.status === 'success') {
-        await fetchData();
-      } else {
-        alert('Gagal menghapus agenda: ' + res.message);
-      }
-    } catch (error) {
-      console.error('Error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const openCreateModal = () => {
-    setModalMode('create');
-    setSelectedId(null);
-    setFormData({
-      judul: '',
-      tipe: 'Rapat',
-      tanggal: new Date().toISOString().split('T')[0],
-      waktu: '09:00',
-      lokasi: '',
-      penanggung_jawab: '',
-      status: 'Terjadwal',
-      disposisi: ''
-    });
+  const handleEditClick = (row) => {
+    setEditData(row);
+    setIsDisposisiMode(false);
     setIsModalOpen(true);
   };
 
-  const openEditModal = (item) => {
-    setModalMode('edit');
-    setSelectedId(item.id);
-    setFormData({
-      judul: item.judul || '',
-      tipe: item.tipe || 'Rapat',
-      tanggal: item.tanggal || '',
-      waktu: item.waktu || '09:00',
-      lokasi: item.lokasi || '',
-      penanggung_jawab: item.penanggung_jawab || '',
-      status: item.status || 'Terjadwal',
-      disposisi: item.disposisi || ''
-    });
+  const handleDisposisiClick = (row) => {
+    setEditData(row);
+    setIsDisposisiMode(true);
     setIsModalOpen(true);
   };
 
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setSelectedId(null);
+  const navigateTo = (page) => {
+    setCurrentPage(page);
+    setIsSidebarOpen(false); 
   };
-
-  const filteredAgendas = agendas.filter((item) => {
-    const matchesStatus =
-      filterStatus === 'Semua' || item.status?.toLowerCase() === filterStatus.toLowerCase();
-    const q = searchQuery.toLowerCase().trim();
-    const matchesSearch =
-      !q ||
-      item.judul?.toLowerCase().includes(q) ||
-      item.lokasi?.toLowerCase().includes(q) ||
-      item.penanggung_jawab?.toLowerCase().includes(q);
-    return matchesStatus && matchesSearch;
-  });
 
   return (
-    <div style={{ maxWidth: 1000, margin: '24px auto', padding: '0 16px', fontFamily: 'sans-serif' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2>Daftar Agenda (Google Sheets API)</h2>
-        <button
-          onClick={openCreateModal}
-          style={{ padding: '8px 16px', backgroundColor: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}
-        >
-          + Tambah Agenda
-        </button>
-      </header>
+    <div className="flex min-h-screen bg-gray-50 text-gray-800 font-sans relative overflow-hidden">
+      {isSidebarOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)}></div>
+      )}
 
-      {/* Filter & Pencarian */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-        <input
-          type="text"
-          placeholder="Cari agenda..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #ccc' }}
-        />
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          style={{ padding: 8, borderRadius: 6, border: '1px solid #ccc' }}
-        >
-          {['Semua', 'Terjadwal', 'Berlangsung', 'Selesai', 'Ditunda', 'Dibatalkan'].map((st) => (
-            <option key={st} value={st}>{st}</option>
-          ))}
-        </select>
+      {/* SIDEBAR */}
+      <div className={`w-64 bg-[#0f172a] text-white flex flex-col justify-between py-4 fixed md:static inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+        <div>
+          <div className="px-6 mb-8 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-white rounded flex items-center justify-center text-[#0f172a] font-bold">AJ</div>
+              <div>
+                <h1 className="font-bold text-sm">Atur Jadwal</h1>
+                <p className="text-[10px] text-gray-400">DISPOSISI PRO</p>
+              </div>
+            </div>
+            <button className="md:hidden text-gray-400" onClick={() => setIsSidebarOpen(false)}>
+              <X size={20} />
+            </button>
+          </div>
+          <p className="px-6 text-xs text-gray-400 mb-2">RUANG KERJA</p>
+          <nav className="flex flex-col gap-1 px-3">
+            <button onClick={() => navigateTo('ikhtisar')} className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm w-full text-left transition ${currentPage === 'ikhtisar' ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800'}`}>
+              <LayoutDashboard size={18} /> Ikhtisar
+            </button>
+            <button onClick={() => navigateTo('jadwal')} className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm w-full text-left transition ${currentPage === 'jadwal' ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800'}`}>
+              <Calendar size={18} /> Jadwal & kalender
+            </button>
+            <button onClick={() => navigateTo('disposisi')} className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm w-full text-left transition ${currentPage === 'disposisi' ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800'}`}>
+              <FileText size={18} /> Disposisi
+            </button>
+          </nav>
+        </div>
+        <div className="px-6">
+          <button onClick={() => navigateTo('pengaturan')} className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm w-full text-left transition ${currentPage === 'pengaturan' ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800'}`}>
+            <Settings size={18} /> Pengaturan
+          </button>
+        </div>
       </div>
 
-      {/* Tabel Agenda */}
-      {loading ? (
-        <p>Memuat data dari Google Sheets...</p>
-      ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f1f5f9' }}>
-              <th style={{ padding: 10 }}>Judul</th>
-              <th style={{ padding: 10 }}>Waktu & Lokasi</th>
-              <th style={{ padding: 10 }}>PIC</th>
-              <th style={{ padding: 10 }}>Status</th>
-              <th style={{ padding: 10 }}>Disposisi</th>
-              <th style={{ padding: 10, textAlign: 'right' }}>Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredAgendas.map((item) => (
-              <tr key={item.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={{ padding: 10 }}>
-                  <strong>{item.judul}</strong>
-                  <div style={{ fontSize: 12, color: '#666' }}>{item.tipe}</div>
-                </td>
-                <td style={{ padding: 10 }}>
-                  {item.tanggal} {item.waktu}
-                  <div style={{ fontSize: 12, color: '#666' }}>{item.lokasi}</div>
-                </td>
-                <td style={{ padding: 10 }}>{item.penanggung_jawab}</td>
-                <td style={{ padding: 10 }}>
-                  <select
-                    value={item.status || 'Terjadwal'}
-                    onChange={(e) => handleStatusChange(item.id, e.target.value)}
-                    style={{ padding: 4, borderRadius: 4 }}
-                  >
-                    <option value="Terjadwal">Terjadwal</option>
-                    <option value="Berlangsung">Berlangsung</option>
-                    <option value="Selesai">Selesai</option>
-                    <option value="Ditunda">Ditunda</option>
-                    <option value="Dibatalkan">Dibatalkan</option>
-                  </select>
-                </td>
-                <td style={{ padding: 10 }}>
-                  {item.disposisi || '-'}
-                  <button
-                    onClick={() => {
-                      const baru = prompt('Ketik disposisi baru:', item.disposisi || '');
-                      if (baru !== null) handleSaveDisposisi(item.id, baru);
-                    }}
-                    style={{ display: 'block', fontSize: 11, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                  >
-                    Ubah
-                  </button>
-                </td>
-                <td style={{ padding: 10, textAlign: 'right' }}>
-                  <button onClick={() => openEditModal(item)} style={{ marginRight: 6 }}>Edit</button>
-                  <button onClick={() => handleDelete(item.id, item.judul)} style={{ color: 'red' }}>Hapus</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      {/* MAIN CONTENT */}
+      <div className="flex-1 flex flex-col h-screen overflow-y-auto w-full">
+        <header className="flex justify-between items-center py-4 px-4 md:px-8 bg-white border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <button className="md:hidden text-gray-600" onClick={() => setIsSidebarOpen(true)}>
+              <Menu size={24} />
+            </button>
+            <div className="text-xs md:text-sm text-gray-500 uppercase">
+              <span className="hidden md:inline">RUANG KERJA / </span>
+              <span className="text-gray-900 font-medium">{currentPage}</span>
+            </div>
+          </div>
+          <div className="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center font-bold text-sm shrink-0">
+            {profil.nama.substring(0, 2).toUpperCase()}
+          </div>
+        </header>
 
-      {/* Modal Tambah / Edit */}
-      {isModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ backgroundColor: '#fff', padding: 24, borderRadius: 8, width: 450 }}>
-            <h3>{modalMode === 'create' ? 'Tambah Agenda Baru' : 'Edit Agenda'}</h3>
-            <form onSubmit={handleSubmitForm} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <input
-                placeholder="Judul Agenda *"
-                required
-                value={formData.judul}
-                onChange={(e) => setFormData({ ...formData, judul: e.target.value })}
-                style={{ padding: 8 }}
-              />
-              <div style={{ display: 'flex', gap: 10 }}>
-                <input
-                  type="date"
-                  value={formData.tanggal}
-                  onChange={(e) => setFormData({ ...formData, tanggal: e.target.value })}
-                  style={{ flex: 1, padding: 8 }}
-                />
-                <input
-                  type="time"
-                  value={formData.waktu}
-                  onChange={(e) => setFormData({ ...formData, waktu: e.target.value })}
-                  style={{ flex: 1, padding: 8 }}
-                />
-              </div>
-              <input
-                placeholder="Lokasi"
-                value={formData.lokasi}
-                onChange={(e) => setFormData({ ...formData, lokasi: e.target.value })}
-                style={{ padding: 8 }}
-              />
-              <input
-                placeholder="Penanggung Jawab"
-                value={formData.penanggung_jawab}
-                onChange={(e) => setFormData({ ...formData, penanggung_jawab: e.target.value })}
-                style={{ padding: 8 }}
-              />
-              <input
-                placeholder="Disposisi"
-                value={formData.disposisi}
-                onChange={(e) => setFormData({ ...formData, disposisi: e.target.value })}
-                style={{ padding: 8 }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
-                <button type="button" onClick={closeModal}>Batal</button>
-                <button type="submit" style={{ backgroundColor: '#059669', color: '#fff', border: 'none', padding: '6px 14px' }}>
-                  Simpan
+        <main className="p-4 md:p-8">
+          {/* HALAMAN IKHTISAR */}
+          {currentPage === 'ikhtisar' && (
+            <>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
+                <div>
+                  <p className="text-xs text-gray-500 uppercase mb-1">Hari Ini</p>
+                  <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-1">Selamat datang, {profil.nama}</h1>
+                </div>
+                <button onClick={() => { setEditData(null); setIsModalOpen(true); }} className="bg-[#1e293b] text-white px-4 py-2 rounded-md flex items-center gap-2 text-sm hover:bg-gray-800 transition w-full md:w-auto justify-center">
+                  <Plus size={16} /> Tambah jadwal
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+                {[
+                  { title: "Total agenda", val: data.length, color: "text-blue-600" },
+                  { title: "Menunggu", val: data.filter(d => d.status === 'Menunggu').length, color: "text-yellow-600" },
+                  { title: "Berjalan", val: data.filter(d => d.status === 'Berjalan').length, color: "text-orange-600" },
+                  { title: "Selesai", val: data.filter(d => d.status === 'Selesai').length, color: "text-green-600" }
+                ].map((stat, i) => (
+                  <div key={i} className="bg-white p-4 rounded-lg border border-gray-200 flex flex-col justify-center shadow-sm">
+                    <h2 className={`text-xl md:text-2xl font-bold ${stat.color}`}>{stat.val}</h2>
+                    <p className="text-xs md:text-sm text-gray-500">{stat.title}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+                <div className="p-4 md:p-5 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                  <h3 className="font-semibold text-gray-800">Agenda terbaru</h3>
+                  <div className="relative w-full md:w-auto">
+                    <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
+                    <input type="text" placeholder="Cari agenda..." className="pl-9 pr-4 py-1.5 border border-gray-300 rounded-md text-sm outline-none w-full md:w-auto" />
+                  </div>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm whitespace-nowrap">
+                    <thead className="bg-gray-50 text-xs text-gray-500 border-b">
+                      <tr>
+                        <th className="px-4 py-3">Tanggal / Waktu</th>
+                        <th className="px-4 py-3">Kegiatan</th>
+                        <th className="px-4 py-3">Lokasi</th>
+                        <th className="px-4 py-3">PJ</th>
+                        <th className="px-4 py-3">Status</th>
+                        <th className="px-4 py-3">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {loading ? (
+                        <tr><td colSpan="6" className="text-center py-6">Memuat data...</td></tr>
+                      ) : data.length === 0 ? (
+                        <tr><td colSpan="6" className="text-center py-6 text-gray-500">Belum ada agenda.</td></tr>
+                      ) : (
+                        data.map((row) => (
+                          <tr key={row.id} className="border-b hover:bg-gray-50">
+                            <td className="px-4 py-4">
+                              <p className="font-medium">{formatTanggal(row.tanggal)}</p>
+                              <p className="text-xs text-gray-500">{formatWaktu(row.waktu)} WIB</p>
+                            </td>
+                            <td className="px-4 py-4">
+                              <p className="font-medium">{row.judul}</p>
+                              <p className="text-xs text-gray-500">{row.tipe}</p>
+                            </td>
+                            <td className="px-4 py-4">{row.lokasi}</td>
+                            <td className="px-4 py-4">{row.penanggung_jawab}</td>
+                            <td className="px-4 py-4">
+                              <select value={row.status} onChange={(e) => handleUpdateStatus(row.id, e.target.value)} className={`px-2 py-1 rounded text-xs font-medium cursor-pointer outline-none border border-transparent hover:border-gray-300 ${row.status === 'Selesai' ? 'bg-green-100 text-green-700' : row.status === 'Menunggu' ? 'bg-yellow-100 text-yellow-700' : row.status === 'Berjalan' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                                <option value="Menunggu">Menunggu</option>
+                                <option value="Berjalan">Berjalan</option>
+                                <option value="Disposisi">Disposisi</option>
+                                <option value="Selesai">Selesai</option>
+                              </select>
+                            </td>
+                            <td className="px-4 py-4 flex gap-3">
+                              <button onClick={() => handleEditClick(row)} className="text-blue-500 hover:text-blue-700"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
+                              <button onClick={() => handleDelete(row.id)} className="text-red-500 hover:text-red-700"><Trash2 size={18} /></button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* HALAMAN JADWAL */}
+          {currentPage === 'jadwal' && (
+            <div className="bg-white p-4 md:p-6 rounded-lg border border-gray-200 shadow-sm">
+              <h2 className="text-lg md:text-xl font-bold mb-4 border-b pb-2">Daftar Semua Jadwal</h2>
+              {loading ? <p>Memuat data...</p> : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {data.map(item => (
+                    <div key={item.id} className="border p-4 rounded-lg flex flex-col gap-2 hover:bg-gray-50">
+                      <div className="flex justify-between items-start">
+                        <h3 className="font-bold text-md md:text-lg text-gray-800">{item.judul}</h3>
+                        <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded shrink-0">{item.tipe}</span>
+                      </div>
+                      <p className="text-sm text-gray-600">📅 {formatTanggal(item.tanggal)} | ⏰ {formatWaktu(item.waktu)} WIB</p>
+                      <p className="text-sm text-gray-600">📍 {item.lokasi}</p>
+                      <p className="text-sm text-gray-600">👤 PJ: {item.penanggung_jawab}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* HALAMAN DISPOSISI */}
+          {currentPage === 'disposisi' && (
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+              <div className="p-4 md:p-5 border-b border-gray-200">
+                <h2 className="text-lg md:text-xl font-bold">Daftar Disposisi</h2>
+                <p className="text-xs md:text-sm text-gray-500">Agenda yang butuh tindak lanjut.</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm whitespace-nowrap">
+                  <thead className="bg-gray-50 text-xs text-gray-500 border-b">
+                    <tr>
+                      <th className="px-4 py-3">Tanggal</th>
+                      <th className="px-4 py-3">Kegiatan</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Catatan</th>
+                      <th className="px-4 py-3">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.filter(d => d.status === 'Disposisi' || d.status === 'Menunggu').map(row => (
+                      <tr key={row.id} className="border-b hover:bg-gray-50">
+                        <td className="px-4 py-4">{formatTanggal(row.tanggal)}</td>
+                        <td className="px-4 py-4 font-medium">{row.judul}</td>
+                        <td className="px-4 py-4">
+                          <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-xs">{row.status}</span>
+                        </td>
+                        <td className="px-4 py-4 text-gray-600 truncate max-w-[150px]">{row.disposisi || '-'}</td>
+                        <td className="px-4 py-4">
+                          <button onClick={() => handleDisposisiClick(row)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs transition">
+                            Beri Disposisi
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* HALAMAN PENGATURAN */}
+          {currentPage === 'pengaturan' && (
+            <div className="bg-white p-4 md:p-6 rounded-lg border border-gray-200 shadow-sm max-w-2xl">
+              <h2 className="text-lg md:text-xl font-bold mb-6 border-b pb-2">Pengaturan Profil</h2>
+              
+              <div className="flex items-center gap-4 md:gap-6 mb-8">
+                <div className="w-16 h-16 md:w-20 md:h-20 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center font-bold text-2xl md:text-3xl shrink-0">
+                  {profil.nama.substring(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="text-md md:text-lg font-bold text-gray-800">{profil.nama}</h3>
+                  <p className="text-xs md:text-sm text-gray-500">Petugas Administrator</p>
+                  <span className="inline-block mt-2 bg-green-100 text-green-700 text-xs px-2 py-1 rounded">Ruang Kerja Aktif</span>
+                </div>
+              </div>
+
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                localStorage.setItem('profilUser', JSON.stringify(profil));
+                alert('Profil berhasil disimpan!');
+              }} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap</label>
+                  <input type="text" required value={profil.nama} onChange={(e) => setProfil({...profil, nama: e.target.value})} className="w-full border p-2 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input type="email" required value={profil.email} onChange={(e) => setProfil({...profil, email: e.target.value})} className="w-full border p-2 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm" />
+                </div>
+                <button type="submit" className="bg-[#1e293b] text-white px-6 py-2 rounded-md mt-4 hover:bg-gray-800 transition w-full md:w-auto text-sm">
+                  Simpan Perubahan
+                </button>
+              </form>
+            </div>
+          )}
+        </main>
+      </div>
+
+      {/* MODAL TAMBAH/EDIT/DISPOSISI */}
+      {isModalOpen && (
+        <ModalUtama onClose={() => setIsModalOpen(false)} onRefresh={fetchData} editData={editData} isDisposisiMode={isDisposisiMode} />
       )}
+    </div>
+  );
+}
+
+function ModalUtama({ onClose, onRefresh, editData, isDisposisiMode }) {
+  const [form, setForm] = useState({ 
+    judul: editData?.judul || '', 
+    tipe: editData?.tipe || 'Kegiatan',
+    tanggal: editData?.tanggal ? editData.tanggal.split('T')[0] : '', 
+    waktu: editData?.waktu ? formatWaktu(editData.waktu) : '', 
+    lokasi: editData?.lokasi || '', 
+    penanggung_jawab: editData?.penanggung_jawab || '', 
+    status: editData?.status || 'Menunggu',
+    disposisi: editData?.disposisi || ''
+  });
+  const [loadingSubmit, setLoadingSubmit] = useState(false);
+
+  const simpan = async (e) => {
+    e.preventDefault();
+    setLoadingSubmit(true);
+    let res;
+    
+    if (isDisposisiMode) {
+      res = await updateAgenda(editData.id, { disposisi: form.disposisi, status: 'Disposisi' });
+    } else if (editData) {
+      res = await updateAgenda(editData.id, form);
+    } else {
+      res = await createAgenda(form);
+    }
+
+    setLoadingSubmit(false);
+
+    if (res && res.status === 'error') {
+      alert('Error: ' + res.message);
+    } else {
+      onRefresh(); 
+      onClose();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white p-5 md:p-6 rounded-lg w-full max-w-md">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg md:text-xl font-bold">{isDisposisiMode ? 'Beri Disposisi' : editData ? 'Edit Jadwal' : 'Tambah Jadwal'}</h2>
+          <button onClick={onClose}><X size={24} /></button>
+        </div>
+        
+        <form onSubmit={simpan} className="space-y-3">
+          {isDisposisiMode ? (
+            <>
+              <p className="text-sm font-medium mb-1">Agenda: {form.judul}</p>
+              <textarea required placeholder="Masukkan catatan disposisi/arahan..." className="w-full border p-2 rounded h-24 text-sm" value={form.disposisi} onChange={e => setForm({...form, disposisi: e.target.value})} />
+            </>
+          ) : (
+            <>
+              <input required placeholder="Nama Kegiatan" className="w-full border p-2 rounded text-sm" value={form.judul} onChange={e => setForm({...form, judul: e.target.value})} />
+              <div className="flex flex-col md:flex-row gap-2">
+                <input required type="date" className="w-full border p-2 rounded text-sm" value={form.tanggal} onChange={e => setForm({...form, tanggal: e.target.value})} />
+                <input required type="time" className="w-full border p-2 rounded text-sm" value={form.waktu} onChange={e => setForm({...form, waktu: e.target.value})} />
+              </div>
+              <input required placeholder="Lokasi" className="w-full border p-2 rounded text-sm" value={form.lokasi} onChange={e => setForm({...form, lokasi: e.target.value})} />
+              <input required placeholder="Penanggung Jawab" className="w-full border p-2 rounded text-sm" value={form.penanggung_jawab} onChange={e => setForm({...form, penanggung_jawab: e.target.value})} />
+              <select className="w-full border p-2 rounded text-sm" value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
+                <option value="Menunggu">Menunggu</option>
+                <option value="Berjalan">Berjalan</option>
+                <option value="Disposisi">Disposisi</option>
+                <option value="Selesai">Selesai</option>
+              </select>
+            </>
+          )}
+          <button type="submit" disabled={loadingSubmit} className="w-full bg-[#1e293b] text-white py-2 rounded mt-4 hover:bg-gray-800 transition text-sm disabled:opacity-50">
+            {loadingSubmit ? 'Menyimpan...' : isDisposisiMode ? 'Kirim Disposisi' : 'Simpan Data'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
