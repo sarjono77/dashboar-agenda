@@ -1,25 +1,23 @@
-// GANTI DENGAN URL /exec MILIKMU YANG BARU
+// PASTIKAN URL INI ADALAH URL /exec MILIKMU
 const API_URL = "https://script.google.com/macros/s/AKfycbzDSeZgajXmnfRzTxsD8Rx0PwDvHA0QPiud2HnaoEXbBlcwMVLZB0z0sBkqEGPq73CoVw/exec";
 
-// Trik khusus untuk menembus CORS Google Apps Script
+// Fungsi bantu untuk mengirim data (POST)
 const sendRequest = async (payload) => {
   try {
-    const formData = new URLSearchParams();
-    Object.keys(payload).forEach(key => formData.append(key, payload[key]));
-
     const res = await fetch(API_URL, {
       method: "POST",
-      // Gunakan text/plain agar browser tidak memblokir request
+      // Kirim sebagai teks JSON
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: formData.toString(),
+      body: JSON.stringify(payload), 
     });
     return await res.json();
   } catch (error) {
-    console.error("Error koneksi ke GAS:", error);
+    console.error("Error koneksi:", error);
     return { status: "error", message: "Gagal koneksi ke server" };
   }
 };
 
+// Fungsi Ambil Data (GET)
 export const getAgendas = async () => {
   try {
     const res = await fetch(`${API_URL}?action=read`, { cache: "no-store" });
