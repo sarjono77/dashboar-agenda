@@ -1,64 +1,42 @@
-// GANTI DENGAN URL /exec MILIKMU
+// GANTI DENGAN URL /exec MILIKMU YANG BARU
 const API_URL = "https://script.google.com/macros/s/AKfycbzDSeZgajXmnfRzTxsD8Rx0PwDvHA0QPiud2HnaoEXbBlcwMVLZB0z0sBkqEGPq73CoVw/exec";
+
+// Trik khusus untuk menembus CORS Google Apps Script
+const sendRequest = async (payload) => {
+  try {
+    const formData = new URLSearchParams();
+    Object.keys(payload).forEach(key => formData.append(key, payload[key]));
+
+    const res = await fetch(API_URL, {
+      method: "POST",
+      // Gunakan text/plain agar browser tidak memblokir request
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: formData.toString(),
+    });
+    return await res.json();
+  } catch (error) {
+    console.error("Error koneksi ke GAS:", error);
+    return { status: "error", message: "Gagal koneksi ke server" };
+  }
+};
 
 export const getAgendas = async () => {
   try {
-    const res = await fetch(`${API_URL}?action=read`);
+    const res = await fetch(`${API_URL}?action=read`, { cache: "no-store" });
     return await res.json();
   } catch (error) {
-    console.error("Error GET:", error);
     return { status: "error", data: [] };
   }
 };
 
 export const createAgenda = async (data) => {
-  try {
-    const formData = new URLSearchParams();
-    formData.append("action", "create");
-    Object.keys(data).forEach(key => formData.append(key, data[key]));
-
-    const res = await fetch(API_URL, {
-      method: "POST",
-      body: formData, // Tanpa headers tambahan, biarkan browser yang atur
-    });
-    return await res.json();
-  } catch (error) {
-    console.error("Error POST Create:", error);
-    return { status: "error", message: "Gagal koneksi ke server" };
-  }
+  return await sendRequest({ action: "create", ...data });
 };
 
 export const updateAgenda = async (id, data) => {
-  try {
-    const formData = new URLSearchParams();
-    formData.append("action", "update");
-    formData.append("id", id);
-    Object.keys(data).forEach(key => formData.append(key, data[key]));
-
-    const res = await fetch(API_URL, {
-      method: "POST",
-      body: formData,
-    });
-    return await res.json();
-  } catch (error) {
-    console.error("Error POST Update:", error);
-    return { status: "error", message: "Gagal koneksi ke server" };
-  }
+  return await sendRequest({ action: "update", id: id, ...data });
 };
 
 export const deleteAgenda = async (id) => {
-  try {
-    const formData = new URLSearchParams();
-    formData.append("action", "delete");
-    formData.append("id", id);
-
-    const res = await fetch(API_URL, {
-      method: "POST",
-      body: formData,
-    });
-    return await res.json();
-  } catch (error) {
-    console.error("Error POST Delete:", error);
-    return { status: "error", message: "Gagal koneksi ke server" };
-  }
+  return await sendRequest({ action: "delete", id: id });
 };
