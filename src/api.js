@@ -1,14 +1,13 @@
-// PASTIKAN URL INI ADALAH URL /exec MILIKMU
 const API_URL = "https://script.google.com/macros/s/AKfycbzDSeZgajXmnfRzTxsD8Rx0PwDvHA0QPiud2HnaoEXbBlcwMVLZB0z0sBkqEGPq73CoVw/exec";
 
-// Fungsi bantu untuk mengirim data (POST)
 const sendRequest = async (payload) => {
   try {
+    const formData = new URLSearchParams();
+    Object.keys(payload).forEach(key => formData.append(key, payload[key]));
+
     const res = await fetch(API_URL, {
       method: "POST",
-      // Kirim sebagai teks JSON
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload), 
+      body: formData, // Kirim sebagai URL-encoded, jangan pakai header JSON
     });
     return await res.json();
   } catch (error) {
@@ -17,7 +16,6 @@ const sendRequest = async (payload) => {
   }
 };
 
-// Fungsi Ambil Data (GET)
 export const getAgendas = async () => {
   try {
     const res = await fetch(`${API_URL}?action=read`, { cache: "no-store" });
